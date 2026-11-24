@@ -52,7 +52,7 @@ resource "ovh_cloud_project_kube_nodepool" "default" {
 
 import {
   to = ovh_cloud_project_kube_nodepool.default
-  id = "${var.service_name}/${ovh_cloud_project_kube.this.id}/a1376202-de1f-4b72-acc6-531d105067c6"
+  id = "${var.service_name}/d2c8923d-f6ba-4223-b6aa-97316c581472/a1376202-de1f-4b72-acc6-531d105067c6"
 }
 
 # Tijdelijk: ghost pool opnemen in de state, zodat hij daarna via Git verwijderd kan worden.
@@ -71,5 +71,5 @@ resource "ovh_cloud_project_kube_nodepool" "hotfix" {
 
 import {
   to = ovh_cloud_project_kube_nodepool.hotfix
-  id = "${var.service_name}/${ovh_cloud_project_kube.this.id}/ade3b16a-dddd-46d9-849e-7e7e7e93e855"
+  id = "${var.service_name}/d2c8923d-f6ba-4223-b6aa-97316c581472/ade3b16a-dddd-46d9-849e-7e7e7e93e855"
 }
