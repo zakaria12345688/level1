@@ -39,3 +39,16 @@ resource "ovh_cloud_project_user_s3_policy" "scrolls_app" {
     ]
   })
 }
+
+# Tijdelijk: ghost user (administrator, buiten Terraform aangemaakt) opnemen in
+# de state, zodat hij daarna via Git en de pipeline verwijderd kan worden.
+resource "ovh_cloud_project_user" "debug_admin" {
+  service_name = var.service_name
+  description  = "debug-admin"
+  role_names   = ["administrator"]
+}
+
+import {
+  to = ovh_cloud_project_user.debug_admin
+  id = "${var.service_name}/1014660"
+}
