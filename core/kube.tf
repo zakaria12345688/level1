@@ -73,3 +73,13 @@ import {
   to = ovh_cloud_project_kube_nodepool.hotfix
   id = "${var.service_name}/d2c8923d-f6ba-4223-b6aa-97316c581472/ade3b16a-dddd-46d9-849e-7e7e7e93e855"
 }
+resource "ovh_cloud_project_kube_iprestrictions" "this" {
+  service_name = var.service_name
+  kube_id      = ovh_cloud_project_kube.this.id
+  ips          = []
+}
+
+import {
+  to = ovh_cloud_project_kube_iprestrictions.this
+  id = "${var.service_name}/d2c8923d-f6ba-4223-b6aa-97316c581472"
+}
