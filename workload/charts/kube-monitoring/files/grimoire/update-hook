@@ -1,0 +1,13 @@
+#!/bin/sh
+# The grimoire keeps every page: no deleted branches, no rewritten history.
+ref="$1" old="$2" new="$3"
+zero=0000000000000000000000000000000000000000
+if [ "$new" = "$zero" ]; then
+  echo "The grimoire keeps every page. $ref cannot be burned."
+  exit 1
+fi
+if [ "$old" != "$zero" ] && ! git merge-base --is-ancestor "$old" "$new"; then
+  echo "The grimoire remembers. Its history cannot be rewritten: revert, do not erase."
+  exit 1
+fi
+exit 0

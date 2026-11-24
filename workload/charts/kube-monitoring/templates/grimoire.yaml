@@ -1,0 +1,158 @@
+# The grimoire: the Git repository the Seer keeps its mind and its remedies in,
+# served over HTTP. Clone it with:
+#   kubectl port-forward -n {{ .Values.oracle.namespace }} svc/grimoire 8081:80
+#   git clone http://localhost:8081/realm.git
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grimoire-genesis
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+data:
+  serve.sh: |
+    {{- .Files.Get "files/grimoire/serve.sh" | nindent 4 }}
+  serve.py: |
+    {{- .Files.Get "files/grimoire/serve.py" | nindent 4 }}
+  update-hook: |
+    {{- .Files.Get "files/grimoire/update-hook" | nindent 4 }}
+  README.md: |
+    {{- .Files.Get "files/grimoire/README.md" | nindent 4 }}
+  persona.md: |
+    {{- .Files.Get "files/grimoire/persona.md" | nindent 4 }}
+  vision-out-of-memory.md: |
+    {{- .Files.Get "files/grimoire/vision-out-of-memory.md" | nindent 4 }}
+  vision-silent.md: |
+    {{- .Files.Get "files/grimoire/vision-silent.md" | nindent 4 }}
+  realm-README.md: |
+    {{- .Files.Get "files/grimoire/realm-README.md" | nindent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grimoire-pages
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.oracle.grimoire.storage }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grimoire
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grimoire
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/name: grimoire
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grimoire
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grimoire
+        app.kubernetes.io/part-of: oracle
+    spec:
+      serviceAccountName: grimoire
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: grimoire
+          image: {{ .Values.oracle.image.repository }}:{{ .Values.oracle.image.tag }}
+          command: ["/bin/sh", "/genesis/serve.sh"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /realm.git/info/refs?service=git-upload-pack
+              port: http
+            periodSeconds: 10
+          volumeMounts:
+            - name: pages
+              mountPath: /srv/git
+            - name: genesis
+              mountPath: /genesis
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 300m
+              memory: 128Mi
+      volumes:
+        - name: pages
+          persistentVolumeClaim:
+            claimName: grimoire-pages
+        - name: tmp
+          emptyDir: {}
+        - name: genesis
+          configMap:
+            name: grimoire-genesis
+            items:
+              - key: serve.sh
+                path: serve.sh
+              - key: serve.py
+                path: serve.py
+              - key: update-hook
+                path: update-hook
+              - key: README.md
+                path: pages/README.md
+              - key: persona.md
+                path: pages/mind/persona.md
+              - key: vision-out-of-memory.md
+                path: pages/mind/visions/out-of-memory.md
+              - key: vision-silent.md
+                path: pages/mind/visions/silent.md
+              - key: realm-README.md
+                path: pages/realm/README.md
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grimoire
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: grimoire
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

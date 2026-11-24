@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ancient-oracle
+description: The Ancient Oracle, the realm's Kubernetes MCP server. Deployed by Terraform (ancient.tf), bump the version when you change it.
+type: application
+version: 0.1.1
+appVersion: "1.0.0"

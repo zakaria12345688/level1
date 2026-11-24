@@ -1,0 +1,8 @@
+# Your team's core/backend.hcl is provided by the organizers. It looks like this:
+bucket = "achrona-0123abcd-tfstate"
+key    = "achrona/core.tfstate"
+region = "gra"
+
+endpoints = {
+  s3 = "https://s3.gra.io.cloud.ovh.net"
+}

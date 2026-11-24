@@ -1,0 +1,6 @@
+# Your team's workload/terraform.tfvars is provided by the organizers. It looks like this:
+service_name      = "0123456789abcdef0123456789abcdef" # Public Cloud project ID
+core_state_bucket = "achrona-0123abcd-tfstate"
+core_state_key    = "achrona/core.tfstate"
+state_region      = "gra"
+state_endpoint    = "https://s3.gra.io.cloud.ovh.net"

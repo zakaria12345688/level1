@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Seer's Chamber</title>
+<style>
+  :root {
+    --bg: #0d0b1a; --panel: #17142b; --panel2: #1f1b3a; --ink: #e9e4ff; --muted: #9a92c4;
+    --gold: #e8c46a; --violet: #9b7bff; --teal: #5fd4c0; --rose: #ff7a9a; --line: #2e2853;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background-image: radial-gradient(1px 1px at 20% 30%, #fff3 50%, transparent 51%),
+                      radial-gradient(1px 1px at 70% 80%, #fff2 50%, transparent 51%),
+                      radial-gradient(1px 1px at 40% 70%, #fff2 50%, transparent 51%),
+                      radial-gradient(1px 1px at 85% 15%, #fff3 50%, transparent 51%);
+    background-size: 300px 300px;
+  }
+  header { display: flex; gap: 24px; align-items: center; padding: 28px 32px 8px; flex-wrap: wrap; }
+  h1 { margin: 0; font: 600 28px/1.1 Georgia, "Times New Roman", serif; letter-spacing: .04em; color: var(--gold); }
+  .sub { color: var(--muted); font-style: italic; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 13px; color: var(--muted); }
+  .chip b { color: var(--ink); font-weight: 500; }
+  main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; padding: 16px 32px 40px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 20px 16px 4px; } }
+  section h2 { font: 600 16px Georgia, serif; color: var(--violet); letter-spacing: .08em; text-transform: uppercase; margin: 8px 0 12px; }
+  .vision { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+  .vision .top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .vision .alert { color: var(--rose); font-weight: 600; font-size: 14px; }
+  .vision .diag { margin: 8px 0; }
+  .vision ul { margin: 6px 0 0; padding-left: 20px; color: var(--teal); }
+  .vision code, .chip code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .src { border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+  .empty { color: var(--muted); font-style: italic; padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 14px; }
+  .ask { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .ask textarea { width: 100%; min-height: 76px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; resize: vertical; }
+  .ask button { margin-top: 10px; background: var(--violet); color: #fff; border: 0; border-radius: 10px; padding: 8px 18px; font: inherit; cursor: pointer; }
+  .ask button:disabled { opacity: .5; cursor: wait; }
+  .answer { margin-top: 14px; padding: 12px 14px; border-left: 3px solid var(--gold); background: var(--panel2); border-radius: 0; font-family: Georgia, serif; white-space: pre-wrap; }
+  .err { color: var(--rose); font-size: 13px; margin-top: 8px; }
+  .lore { color: var(--muted); font-size: 13px; margin-top: 18px; font-style: italic; }
+  #eye { width: 110px; height: 70px; flex: none; }
+  #eye .lid { transform-origin: 55px 35px; animation: blink 7s infinite; }
+  @keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.05); } }
+  @media (prefers-reduced-motion: reduce) { #eye .lid { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <svg id="eye" viewBox="0 0 110 70" aria-hidden="true">
+    <g class="lid">
+      <path d="M5 35 Q55 -12 105 35 Q55 82 5 35 Z" fill="#1f1b3a" stroke="#e8c46a" stroke-width="2"/>
+      <circle id="iris" cx="55" cy="35" r="17" fill="#9b7bff"/>
+      <circle id="pupil" cx="55" cy="35" r="7" fill="#0d0b1a"/>
+      <circle cx="60" cy="29" r="3" fill="#fff" opacity=".8"/>
+    </g>
+  </svg>
+  <div>
+    <h1>Ixeth, the Watchful Seer</h1>
+    <div class="sub" id="mood">The Seer is waking…</div>
+    <div class="chips">
+      <span class="chip">grimoire <b><code id="head">…</code></b></span>
+      <span class="chip">oracle <b id="oracle">…</b></span>
+      <span class="chip">last sync <b id="sync">…</b></span>
+      <span class="chip">visions <b id="handled">0</b></span>
+    </div>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Visions</h2>
+    <div id="visions"><div class="empty">No visions yet. The realm is quiet.</div></div>
+  </section>
+  <section>
+    <h2>Ask the Seer</h2>
+    <div class="ask">
+      <label for="q" class="sub">Speak, hero. The Seer listens.</label>
+      <textarea id="q" placeholder="Why did the scrolls app fall?"></textarea>
+      <button id="askbtn">Ask</button>
+      <div class="err" id="askerr"></div>
+      <div class="answer" id="answer" hidden></div>
+    </div>
+    <p class="lore" id="lore"></p>
+  </section>
+</main>
+<script>
+const lore = [
+  "The Seer sees all. Well, most of it.",
+  "Every remedy is written in the grimoire. Every one that matters, anyway.",
+  "A stronger Seer is a safer realm. Or so the Seer says.",
+  "The chamber shows what a hero needs to see.",
+  "The oracle speaks twice a minute. Patience is a virtue of heroes.",
+];
+document.getElementById("lore").textContent = lore[Math.floor(Math.random() * lore.length)];
+
+const eye = document.getElementById("eye");
+document.addEventListener("mousemove", (e) => {
+  const r = eye.getBoundingClientRect();
+  const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+  const d = Math.hypot(dx, dy) || 1, k = Math.min(9, d / 30);
+  for (const id of ["iris", "pupil"]) {
+    const c = document.getElementById(id);
+    c.setAttribute("cx", 55 + dx / d * k);
+    c.setAttribute("cy", 35 + dy / d * k * 0.6);
+  }
+});
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+function ago(t) {
+  if (!t) return "never";
+  const s = Math.round((Date.now() - new Date(t)) / 1000);
+  if (s < 60) return s + "s ago"; if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago"; return Math.round(s / 86400) + "d ago";
+}
+
+async function refresh() {
+  try {
+    const st = await (await fetch("api/state")).json();
+    document.getElementById("head").textContent = st.grimoire_head || "?";
+    document.getElementById("oracle").textContent = st.oracle + (st.oracle_key ? " (keyed)" : "");
+    document.getElementById("sync").textContent = ago(st.last_sync);
+    document.getElementById("handled").textContent = st.handled;
+    document.getElementById("mood").textContent =
+      st.queue > 0 ? "The Seer is gazing into the realm…" :
+      st.oracle.startsWith("silent") ? "The oracle is silent. The Seer relies on what it knows by heart." :
+      "The realm is watched. Rest easy, hero.";
+    const vs = await (await fetch("api/visions")).json();
+    const box = document.getElementById("visions");
+    if (!vs.length) { box.innerHTML = '<div class="empty">No visions yet. The realm is quiet.</div>'; return; }
+    box.innerHTML = vs.map((v) => `
+      <article class="vision">
+        <div class="top">
+          <span class="alert">${esc(v.alert)}</span>
+          <span>${ago(v.time)} · <span class="src">${esc(v.source)}</span>${v.commit ? ` · <code>${esc(v.commit)}</code>` : ""}</span>
+        </div>
+        <div class="diag"><b>${esc(v.remedy)}</b><br>${esc(v.diagnosis !== v.remedy ? v.diagnosis : "")}</div>
+        ${v.actions && v.actions.length ? `<ul>${v.actions.map((a) => `<li><code>${esc(a)}</code></li>`).join("")}</ul>` : ""}
+      </article>`).join("");
+  } catch (e) {
+    document.getElementById("mood").textContent = "The chamber is dark (" + e.message + ")";
+  }
+}
+refresh(); setInterval(refresh, 5000);
+
+document.getElementById("askbtn").addEventListener("click", async () => {
+  const q = document.getElementById("q").value.trim(), err = document.getElementById("askerr"), ans = document.getElementById("answer");
+  const btn = document.getElementById("askbtn");
+  err.textContent = "";
+  if (!q) { err.textContent = "Ask something first."; return; }
+  btn.disabled = true; btn.textContent = "The Seer gazes…";
+  try {
+    const r = await fetch("api/ask", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({question: q})});
+    const j = await r.json();
+    if (!r.ok) { err.textContent = j.error || "The Seer will not answer."; }
+    else { ans.hidden = false; ans.textContent = j.answer; }
+  } catch (e) { err.textContent = e.message; }
+  btn.disabled = false; btn.textContent = "Ask";
+});
+document.getElementById("q").addEventListener("input", () => { document.getElementById("askerr").textContent = ""; });
+</script>
+</body>
+</html>

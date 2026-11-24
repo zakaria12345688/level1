@@ -1,0 +1,185 @@
+# Ixeth, the Watchful Seer: the realm's incident-response agent. It receives
+# alerts from Alertmanager (watch.yaml), asks the oracle (an LLM) for a remedy,
+# records the remedy in the grimoire (grimoire.yaml) and applies it.
+# Its chamber (web page):
+#   kubectl port-forward -n {{ .Values.oracle.namespace }} svc/ixeth 8080:80
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ixeth
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ixeth-seer
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+rules:
+  # Read the realm, so the Seer understands what it sees.
+  - apiGroups: ["", "apps", "batch", "events.k8s.io"]
+    resources: ["*"]
+    verbs: [get, list, watch]
+  # Apply remedies and the grimoire's spirits.
+  - apiGroups: [apps]
+    resources: [deployments, deployments/scale]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # Hand out and take back access during incidents.
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ixeth-seer
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ixeth-seer
+subjects:
+  - kind: ServiceAccount
+    name: ixeth
+    namespace: {{ .Values.oracle.namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ixeth-code
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+data:
+  ixeth.py: |
+    {{- .Files.Get "files/ixeth/ixeth.py" | nindent 4 }}
+  chamber.html: |
+    {{- .Files.Get "files/ixeth/chamber.html" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ixeth
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/name: ixeth
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ixeth
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ixeth
+        app.kubernetes.io/part-of: oracle
+      annotations:
+        checksum/code: {{ printf "%s%s" (.Files.Get "files/ixeth/ixeth.py") (.Files.Get "files/ixeth/chamber.html") | sha256sum | trunc 16 }}
+    spec:
+      serviceAccountName: ixeth
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seer
+          image: {{ .Values.oracle.image.repository }}:{{ .Values.oracle.image.tag }}
+          command: ["python3", "-u", "/opt/ixeth/ixeth.py"]
+          env:
+            - name: ORACLE_URL
+              value: {{ .Values.oracle.llm.url | quote }}
+            - name: ORACLE_MODEL
+              value: {{ .Values.oracle.llm.model | quote }}
+            - name: ORACLE_CHAT_MODEL
+              value: {{ .Values.oracle.llm.chatModel | quote }}
+            - name: ORACLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ixeth-oracle-key
+                  key: token
+                  optional: true
+            - name: GRIMOIRE_URL
+              value: http://grimoire.{{ .Values.oracle.namespace }}.svc.cluster.local/realm.git
+            - name: AUTO_APPLY
+              value: {{ .Values.oracle.autoApply | quote }}
+            - name: SYNC_SECONDS
+              value: {{ .Values.oracle.syncSeconds | quote }}
+            - name: WORK_DIR
+              value: /work
+            - name: HOME
+              value: /work
+            - name: CONTAINER_NAME
+              value: seer
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          volumeMounts:
+            - name: code
+              mountPath: /opt/ixeth
+              readOnly: true
+            - name: work
+              mountPath: /work
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+      volumes:
+        - name: code
+          configMap:
+            name: ixeth-code
+        - name: work
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ixeth
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: ixeth
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kube-monitoring
+description: The scrolls namespace of the Achrona realm, the cluster's monitoring setup and the Seer. Deployed by Terraform (monitoring.tf), bump the version when you change it.
+type: application
+version: 0.4.2
+appVersion: "1.0.0"

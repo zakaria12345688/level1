@@ -1,0 +1,229 @@
+# The watch over the scrolls namespace: the sentinel raises alerts in
+# Alertmanager, which routes them to the Seer (oracle.yaml).
+# Alertmanager serves everything under /alertmanager/ (also through the ingress):
+#   kubectl port-forward -n {{ .Values.oracle.namespace }} svc/alertmanager 9093:9093
+#   http://localhost:9093/alertmanager/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+data:
+  alertmanager.yml: |
+    route:
+      receiver: the-seer
+      group_by: [alertname, namespace, deployment]
+      group_wait: 15s
+      group_interval: 1m
+      repeat_interval: 15m
+    receivers:
+      - name: the-seer
+        webhook_configs:
+          - url: http://ixeth.{{ .Values.oracle.namespace }}.svc.cluster.local/alerts
+            send_resolved: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+        app.kubernetes.io/part-of: oracle
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alertmanager
+          image: {{ .Values.oracle.alertmanager.image.repository }}:{{ .Values.oracle.alertmanager.image.tag }}
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+            - --cluster.listen-address=
+            - --web.route-prefix=/alertmanager
+          ports:
+            - name: http
+              containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /alertmanager/-/ready
+              port: http
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+              readOnly: true
+            - name: data
+              mountPath: /alertmanager
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sentinel
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sentinel
+  namespace: {{ .Values.scrolls.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sentinel
+  namespace: {{ .Values.scrolls.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sentinel
+subjects:
+  - kind: ServiceAccount
+    name: sentinel
+    namespace: {{ .Values.oracle.namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sentinel
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+data:
+  sentinel.sh: |
+    {{- .Files.Get "files/watch/sentinel.sh" | nindent 4 }}
+  runbooks.json: |
+    {{- .Files.Get "files/watch/runbooks.json" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/name: sentinel
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentinel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentinel
+        app.kubernetes.io/part-of: oracle
+      annotations:
+        checksum/config: {{ printf "%s%s" (.Files.Get "files/watch/sentinel.sh") (.Files.Get "files/watch/runbooks.json") | sha256sum | trunc 16 }}
+    spec:
+      serviceAccountName: sentinel
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sentinel
+          image: {{ .Values.oracle.image.repository }}:{{ .Values.oracle.image.tag }}
+          command: ["/bin/sh", "/etc/sentinel/sentinel.sh"]
+          env:
+            - name: WATCH_NAMESPACE
+              value: {{ .Values.scrolls.namespace }}
+            - name: ALERTMANAGER_URL
+              value: http://alertmanager.{{ .Values.oracle.namespace }}.svc.cluster.local:9093/alertmanager
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: config
+              mountPath: /etc/sentinel
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: sentinel
+        - name: tmp
+          emptyDir: {}

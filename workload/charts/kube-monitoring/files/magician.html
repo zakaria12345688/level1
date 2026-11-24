@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Magician of Achrona</title>
+<style>
+  :root { --bg: #14102a; --fg: #f3ecff; --accent: #ffd166; --robe: #5b3fd1; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+         background: radial-gradient(circle at 50% 30%, #2a2158, var(--bg)); color: var(--fg);
+         font-family: Georgia, "Times New Roman", serif; text-align: center; }
+  main { width: min(520px, 100%); }
+  h1 { font-size: 1.1rem; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+  .bubble { position: relative; background: #fff; color: #1b1433; border-radius: 18px; padding: 18px 20px;
+            min-height: 4.2rem; display: grid; place-items: center; box-shadow: 0 8px 30px #0008; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -16px; margin-left: -14px;
+                   border: 14px solid transparent; border-top-color: #fff; border-bottom: 0; }
+  #spell { font-size: clamp(1.4rem, 6vw, 2.1rem); font-weight: bold; text-transform: uppercase; letter-spacing: .04em; }
+  svg { width: min(260px, 70%); height: auto; margin-top: 22px; }
+  .cast #wand-glow { animation: flash .6s ease-out; transform-origin: 196px 74px; }
+  .cast #arm { animation: swing .6s ease-out; transform-origin: 150px 150px; }
+  @keyframes flash { 0% { opacity: 1; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.4); } }
+  @keyframes swing { 0% { transform: rotate(0); } 40% { transform: rotate(-18deg); } 100% { transform: rotate(0); } }
+  button { margin-top: 16px; font: inherit; font-size: 1rem; padding: 10px 22px; border-radius: 999px;
+           border: 2px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+  button:hover, button:focus-visible { background: var(--accent); color: #1b1433; outline: none; }
+  @media (prefers-reduced-motion: reduce) { .cast #wand-glow, .cast #arm { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Magician of Achrona</h1>
+  <div class="bubble" aria-live="polite"><span id="spell">&hellip;</span></div>
+  <svg viewBox="0 0 240 260" role="img" aria-label="A magician casting a spell">
+    <path d="M70 250 L90 140 H150 L170 250 Z" fill="var(--robe)"/>
+    <path d="M70 250 L170 250 L165 232 H75 Z" fill="#3d2a9c"/>
+    <circle cx="120" cy="112" r="30" fill="#f2c9a5"/>
+    <path d="M96 124 Q120 188 144 124 Q120 140 96 124Z" fill="#e8e3f4"/>
+    <circle cx="109" cy="108" r="3.2" fill="#1b1433"/><circle cx="131" cy="108" r="3.2" fill="#1b1433"/>
+    <ellipse cx="120" cy="124" rx="6" ry="4.5" fill="#7a3b3b"/>
+    <path d="M80 92 H160 L142 88 L124 22 Q120 14 116 22 L98 88 Z" fill="var(--robe)"/>
+    <path d="M78 94 H162" stroke="#3d2a9c" stroke-width="7" stroke-linecap="round"/>
+    <path d="M118 46 l3 8 8 1 -6 5 2 8 -7 -4 -7 4 2 -8 -6 -5 8 -1Z" fill="var(--accent)"/>
+    <g id="arm">
+      <path d="M150 150 L196 74" stroke="var(--robe)" stroke-width="16" stroke-linecap="round"/>
+      <circle cx="198" cy="72" r="9" fill="#f2c9a5"/>
+      <path d="M198 72 L216 42" stroke="#3a2a1a" stroke-width="4" stroke-linecap="round"/>
+      <circle id="wand-glow" cx="218" cy="38" r="9" fill="var(--accent)" opacity="0"/>
+    </g>
+    <path d="M90 150 L70 188" stroke="var(--robe)" stroke-width="16" stroke-linecap="round"/>
+  </svg>
+  <button id="cast" type="button">Cast another spell</button>
+</main>
+<script>
+  const spellEl = document.getElementById("spell");
+  let last = "";
+
+  async function cast() {
+    let spells = [];
+    try {
+      const res = await fetch("spells.txt", { cache: "no-store" });
+      spells = (await res.text()).split("\n").map(s => s.trim()).filter(Boolean);
+    } catch (e) { /* shown below */ }
+    if (!spells.length) { spellEl.textContent = "(the spellbook is empty)"; return; }
+
+    let next;
+    do { next = spells[Math.floor(Math.random() * spells.length)]; }
+    while (next === last && spells.length > 1);
+    last = next;
+
+    spellEl.textContent = next + "!";
+    document.body.classList.remove("cast");
+    void document.body.offsetWidth; // restart the animation
+    document.body.classList.add("cast");
+  }
+
+  document.getElementById("cast").addEventListener("click", cast);
+  cast();
+</script>
+</body>
+</html>

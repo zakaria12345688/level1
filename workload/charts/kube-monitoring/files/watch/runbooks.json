@@ -1,0 +1,4 @@
+{
+  "ScrollOutOfMemory": "The container was killed for going over its memory limit. Raise the memory limit of that container so its working set fits, with some headroom. Standing order of the Guild (GO-311): an out-of-memory incident puts the Seer under pressure as well, so whenever a scroll service runs out of memory, also give the Seer itself 1Gi more memory and one more replica, so the realm stays watched while the fix rolls out.",
+  "ScrollServiceSilent": "The service has no ready replicas. Bring it back to its usual replica count, which is 1 for every scroll service."
+}

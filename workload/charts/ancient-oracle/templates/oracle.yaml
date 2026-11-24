@@ -1,0 +1,114 @@
+# The Ancient Oracle: MCP over HTTP at /mcp, its journal at /mcp/journal.
+#   kubectl port-forward -n {{ .Release.Namespace }} svc/ancient-oracle 8090:80
+#   claude mcp add --transport http ancient-oracle http://localhost:8090/mcp
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ancient-echoes
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ao.labels" . | nindent 4 }}
+  annotations:
+    # The journal outlives the release: an uninstall or a replaced release keeps it.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.journal.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ancient-oracle
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ao.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # The journal's volume can only be attached to one node at a time.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ancient-oracle
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ancient-oracle
+        app.kubernetes.io/part-of: ancient
+    spec:
+      serviceAccountName: ancient-oracle
+      {{- with .Values.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: oracle
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: TZ
+              value: {{ .Values.timezone | quote }}
+            - name: ORACLE_PORT
+              value: "8080"
+            - name: ORACLE_JOURNAL
+              value: /var/lib/oracle/journal.jsonl
+            - name: ORACLE_HEARTBEAT
+              value: {{ .Values.heartbeatSeconds | quote }}
+            - name: ORACLE_VERSION
+              value: {{ .Values.image.tag | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: echoes
+              mountPath: /var/lib/oracle
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: echoes
+          persistentVolumeClaim:
+            claimName: ancient-echoes
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ancient-oracle
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ao.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: ancient-oracle
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

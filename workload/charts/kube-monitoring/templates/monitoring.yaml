@@ -1,0 +1,72 @@
+# Small monitoring load: scrapes the cluster every minute with the
+# metrics-collector account. It reports ready only while its last scrape worked.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: metrics-collector
+    app.kubernetes.io/part-of: monitoring
+    {{- include "km.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metrics-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metrics-collector
+        app.kubernetes.io/part-of: monitoring
+        {{- include "km.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: metrics-collector
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: collector
+          image: {{ .Values.monitoring.image.repository }}:{{ .Values.monitoring.image.tag }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                if nodes=$(kubectl get nodes --no-headers) \
+                  && pods=$(kubectl get pods --all-namespaces --no-headers) \
+                  && kubectl get --raw /metrics > /dev/null; then
+                  echo "[collector] nodes: $(echo "$nodes" | wc -l) pods: $(echo "$pods" | wc -l) apiserver metrics ok"
+                  touch /tmp/ok
+                else
+                  echo "[collector] scrape failed"
+                fi
+                sleep 60
+              done
+          env:
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "find /tmp/ok -mmin -3 | grep -q ."]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}

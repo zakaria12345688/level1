@@ -1,0 +1,67 @@
+scrolls:
+  namespace: scrolls
+  image:
+    repository: busybox
+    tag: "1.37.0"
+  # Megabytes of the ledger that scrolls-app keeps warm in memory.
+  ledgerMegabytes: 12
+  # Set by Terraform (workload/monitoring.tf) via set_sensitive.
+  # Never put real values here.
+  s3AccessKey: ""
+  s3SecretKey: ""
+  signingKey: ""
+
+monitoring:
+  image:
+    repository: alpine/k8s
+    tag: "1.33.13"
+
+# The magician's repertoire. Rendered into the ConfigMap `spells`.
+magician:
+  spells:
+    - Ventus Ardens
+    - Luminaris Maxima
+    - Aqua Obscura
+    - Tempus Fugit
+    - Ferrum Vertere
+    - Nebula Magna
+    - Pergamen Aperio
+    - Silentium Aeternum
+    - Ignis Vortex
+    - Custos Arcanum
+
+# Ixeth, the Watchful Seer: the realm's incident-response agent, with the
+# grimoire it keeps its mind and its remedies in, and the watch that alerts it.
+oracle:
+  namespace: oracle
+  image:
+    repository: alpine/k8s
+    tag: "1.33.13"
+  alertmanager:
+    image:
+      repository: quay.io/prometheus/alertmanager
+      tag: v0.28.1
+  # Any OpenAI-compatible chat completions endpoint. OVHcloud AI Endpoints
+  # works without a key (rate limited per IP); a key in the Secret
+  # `ixeth-oracle-key` (key `token`) lifts the limit.
+  llm:
+    url: https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions
+    model: Mistral-Small-3.2-24B-Instruct-2506
+    chatModel: Meta-Llama-3_3-70B-Instruct
+  # Remedies are applied by the Seer itself (the grimoire is synced every
+  # syncSeconds). Set autoApply to false to only record them.
+  autoApply: true
+  syncSeconds: 60
+  grimoire:
+    storage: 1Gi
+
+# Routes through the Traefik ingress of ../../ingress.tf, behind its basic auth:
+# / the Seer's chamber, /realm.git the grimoire, /alertmanager/, /magician/ on
+# the load balancer's IP, and the same on chamber.<domain>, grimoire.<domain>,
+# alertmanager.<domain> and magician.<domain> for an /etc/hosts entry
+# (`terraform output -raw hosts`). Set by Terraform (var.ingress_domain).
+ingress:
+  enabled: true
+  className: traefik
+  middlewareNamespace: traefik
+  domain: achrona.test

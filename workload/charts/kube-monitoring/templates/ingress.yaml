@@ -1,0 +1,151 @@
+{{- if .Values.ingress.enabled }}
+{{- $mw := .Values.ingress.middlewareNamespace }}
+# The way in from outside, through Traefik (ingress.tf in the workload config).
+# Every route asks for the basic auth from `terraform output`.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oracle
+  namespace: {{ .Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" . | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $mw }}-guild-auth@kubernetescrd
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ixeth
+                port:
+                  name: http
+          - path: /realm.git
+            pathType: Prefix
+            backend:
+              service:
+                name: grimoire
+                port:
+                  name: http
+          - path: /alertmanager
+            pathType: Prefix
+            backend:
+              service:
+                name: alertmanager
+                port:
+                  number: 9093
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: magician
+  namespace: {{ .Values.scrolls.namespace }}
+  labels:
+    app.kubernetes.io/part-of: scrolls
+    {{- include "km.labels" . | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $mw }}-guild-auth@kubernetescrd,{{ $mw }}-trailing-slash@kubernetescrd,{{ $mw }}-strip-magician@kubernetescrd
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          - path: /magician
+            pathType: Prefix
+            backend:
+              service:
+                name: magician
+                port:
+                  number: 80
+{{- with .Values.ingress.domain }}
+{{- $d := . }}
+---
+# The same services on names of their own, for teams that put the line from
+# `terraform output -raw hosts` in their /etc/hosts.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oracle-hosts
+  namespace: {{ $.Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" $ | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $mw }}-guild-auth@kubernetescrd
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  rules:
+    - host: chamber.{{ $d }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ixeth
+                port:
+                  name: http
+    - host: grimoire.{{ $d }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grimoire
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alertmanager-host
+  namespace: {{ $.Values.oracle.namespace }}
+  labels:
+    app.kubernetes.io/part-of: oracle
+    {{- include "km.labels" $ | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $mw }}-guild-auth@kubernetescrd,{{ $mw }}-alertmanager-root@kubernetescrd
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  rules:
+    - host: alertmanager.{{ $d }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: alertmanager
+                port:
+                  number: 9093
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: magician-host
+  namespace: {{ $.Values.scrolls.namespace }}
+  labels:
+    app.kubernetes.io/part-of: scrolls
+    {{- include "km.labels" $ | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $mw }}-guild-auth@kubernetescrd
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  rules:
+    - host: magician.{{ $d }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: magician
+                port:
+                  number: 80
+{{- end }}
+{{- end }}

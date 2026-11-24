@@ -1,0 +1,17 @@
+# Secrets
+*.env
+backend.hcl
+terraform.tfvars
+*.auto.tfvars
+
+# Terraform lokaal
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+drift.txt
+crash.log
+
+# Overig
+deploy.log
+.DS_Store

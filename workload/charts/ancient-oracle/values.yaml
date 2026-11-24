@@ -1,0 +1,31 @@
+# The image is built from ../../images/ancient-oracle and pushed to the team's
+# registry. Terraform (ancient.tf) sets image.repository and image.tag.
+image:
+  repository: registry.invalid/realm/ancient-oracle
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+  # Docker config Secret for the registry, created by Terraform in the same namespace.
+  pullSecret: realm-registry
+
+# The realm's local time (POSIX TZ string): Brussels, with summer time.
+timezone: "CET-1CEST,M3.5.0,M10.5.0/3"
+
+# Seconds between the Oracle's own check-ups of the realm (written to its journal). 0 disables them.
+heartbeatSeconds: 900
+
+journal:
+  storage: 1Gi
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 48Mi
+  limits:
+    cpu: 500m
+    memory: 192Mi
+
+# Route /mcp through the Traefik ingress of ../../ingress.tf, behind its basic auth.
+ingress:
+  enabled: true
+  className: traefik
+  middlewareNamespace: traefik
