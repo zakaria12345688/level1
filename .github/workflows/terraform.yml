@@ -1,0 +1,134 @@
+name: terraform
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"   # nachtelijke drift-check
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_IN_AUTOMATION: "true"
+  AWS_ACCESS_KEY_ID: ${{ secrets.STATE_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.STATE_SECRET_KEY }}
+  OVH_CLIENT_ID: ${{ secrets.OVH_CLIENT_ID }}
+  OVH_CLIENT_SECRET: ${{ secrets.OVH_CLIENT_SECRET }}
+
+jobs:
+  checks:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: terraform-linters/setup-tflint@v4
+      - run: terraform fmt -check -recursive
+      - name: validate
+        run: |
+          for d in core workload; do
+            terraform -chdir=$d init -backend=false -input=false
+            terraform -chdir=$d validate
+          done
+      - run: tflint --recursive
+      - name: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: true
+
+  plan:
+    if: github.event_name == 'pull_request'
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: configs uit secrets
+        env:
+          CORE_BACKEND: ${{ secrets.CORE_BACKEND_HCL }}
+          CORE_VARS: ${{ secrets.CORE_TFVARS }}
+          WL_BACKEND: ${{ secrets.WORKLOAD_BACKEND_HCL }}
+          WL_VARS: ${{ secrets.WORKLOAD_TFVARS }}
+        run: |
+          printf '%s\n' "$CORE_BACKEND" > core/backend.hcl
+          printf '%s\n' "$CORE_VARS"    > core/terraform.tfvars
+          printf '%s\n' "$WL_BACKEND"   > workload/backend.hcl
+          printf '%s\n' "$WL_VARS"      > workload/terraform.tfvars
+      - name: plan core
+        run: |
+          cd core
+          terraform init -backend-config=backend.hcl -input=false
+          terraform plan -input=false -no-color
+      - name: plan workload
+        # faalt zolang core nog nooit is toegepast (kube_id ontbreekt)
+        continue-on-error: true
+        run: |
+          cd workload
+          terraform init -backend-config=backend.hcl -input=false
+          terraform plan -input=false -no-color
+
+  apply:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency: terraform-apply
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: configs uit secrets
+        env:
+          CORE_BACKEND: ${{ secrets.CORE_BACKEND_HCL }}
+          CORE_VARS: ${{ secrets.CORE_TFVARS }}
+          WL_BACKEND: ${{ secrets.WORKLOAD_BACKEND_HCL }}
+          WL_VARS: ${{ secrets.WORKLOAD_TFVARS }}
+        run: |
+          printf '%s\n' "$CORE_BACKEND" > core/backend.hcl
+          printf '%s\n' "$CORE_VARS"    > core/terraform.tfvars
+          printf '%s\n' "$WL_BACKEND"   > workload/backend.hcl
+          printf '%s\n' "$WL_VARS"      > workload/terraform.tfvars
+      - name: apply core
+        run: |
+          cd core
+          terraform init -backend-config=backend.hcl -input=false
+          terraform apply -auto-approve -input=false
+      - name: apply workload
+        run: |
+          cd workload
+          terraform init -backend-config=backend.hcl -input=false
+          terraform apply -auto-approve -input=false
+
+  drift:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    concurrency: terraform-apply
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: configs uit secrets
+        env:
+          CORE_BACKEND: ${{ secrets.CORE_BACKEND_HCL }}
+          CORE_VARS: ${{ secrets.CORE_TFVARS }}
+          WL_BACKEND: ${{ secrets.WORKLOAD_BACKEND_HCL }}
+          WL_VARS: ${{ secrets.WORKLOAD_TFVARS }}
+        run: |
+          printf '%s\n' "$CORE_BACKEND" > core/backend.hcl
+          printf '%s\n' "$CORE_VARS"    > core/terraform.tfvars
+          printf '%s\n' "$WL_BACKEND"   > workload/backend.hcl
+          printf '%s\n' "$WL_VARS"      > workload/terraform.tfvars
+      - name: drift core
+        run: |
+          cd core
+          terraform init -backend-config=backend.hcl -input=false
+          terraform plan -detailed-exitcode -input=false -no-color
+      - name: drift workload
+        run: |
+          cd workload
+          terraform init -backend-config=backend.hcl -input=false
+          terraform plan -detailed-exitcode -input=false -no-color
