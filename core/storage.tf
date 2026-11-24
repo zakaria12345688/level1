@@ -5,6 +5,14 @@ resource "ovh_cloud_storage_object_bucket" "scrolls" {
   region       = var.storage_region
   name         = local.bucket_name
 
+  lifecycle {
+    # De provider ziet een lege object_lock live als verschil en wil dan de
+    # bucket vervangen. Niet vervangen: versioning/encryptie worden in-place hersteld.
+    ignore_changes = [object_lock]
+    # Vangnet: een plan dat de bucket wil vernietigen faalt in plaats van te draaien.
+    prevent_destroy = true
+  }
+
   versioning = {
     status = "ENABLED"
   }
